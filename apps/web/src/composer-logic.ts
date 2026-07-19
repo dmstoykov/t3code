@@ -4,6 +4,25 @@ import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 export type ComposerTriggerKind = "path" | "slash-command" | "skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
 
+// The server converts HEIC/HEIF to JPEG at ingest (see Normalizer.ts), so
+// those stay accepted here even though no provider reads them directly.
+const SUPPORTED_COMPOSER_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+export function isSupportedComposerImageMimeType(mimeType: string): boolean {
+  return SUPPORTED_COMPOSER_IMAGE_MIME_TYPES.has(mimeType.toLowerCase());
+}
+
+export function unsupportedComposerImageTypeMessage(fileName: string): string {
+  return `Unsupported file type for '${fileName}'. Supported formats: PNG, JPEG, GIF, WEBP, HEIC, HEIF.`;
+}
+
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
   query: string;

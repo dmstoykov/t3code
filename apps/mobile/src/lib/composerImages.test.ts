@@ -39,8 +39,37 @@ vi.mock("./uuid", () => ({
 import {
   convertPastedImagesToAttachments,
   isOwnedPastedImageUri,
+  isSupportedComposerImageMimeType,
   toUploadChatImageAttachments,
+  unsupportedComposerImageTypeMessage,
 } from "./composerImages";
+
+describe("isSupportedComposerImageMimeType", () => {
+  it("accepts the safe target formats", () => {
+    for (const mimeType of ["image/png", "image/jpeg", "image/gif", "image/webp"]) {
+      expect(isSupportedComposerImageMimeType(mimeType)).toBe(true);
+    }
+  });
+
+  it("accepts HEIC/HEIF because the server converts them at ingest", () => {
+    expect(isSupportedComposerImageMimeType("image/heic")).toBe(true);
+    expect(isSupportedComposerImageMimeType("image/heif")).toBe(true);
+  });
+
+  it("rejects unsupported image formats", () => {
+    for (const mimeType of ["image/tiff", "image/bmp", "image/avif"]) {
+      expect(isSupportedComposerImageMimeType(mimeType)).toBe(false);
+    }
+  });
+});
+
+describe("unsupportedComposerImageTypeMessage", () => {
+  it("names the file and the supported formats", () => {
+    expect(unsupportedComposerImageTypeMessage("diagram.tiff")).toBe(
+      "Unsupported file type for 'diagram.tiff'. Supported formats: PNG, JPEG, GIF, WEBP, HEIC, HEIF.",
+    );
+  });
+});
 
 describe("toUploadChatImageAttachments", () => {
   it("strips client draft id and previewUri for the startTurn wire shape", () => {

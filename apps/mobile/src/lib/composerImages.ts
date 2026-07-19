@@ -26,6 +26,25 @@ export function toUploadChatImageAttachments(
 
 const OWNED_PASTED_IMAGE_DIRECTORY = "t3-composer-paste";
 
+// The server converts HEIC/HEIF to JPEG at ingest (see Normalizer.ts), so
+// those stay accepted here even though no provider reads them directly.
+const SUPPORTED_COMPOSER_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+export function isSupportedComposerImageMimeType(mimeType: string): boolean {
+  return SUPPORTED_COMPOSER_IMAGE_MIME_TYPES.has(mimeType.toLowerCase());
+}
+
+export function unsupportedComposerImageTypeMessage(fileName: string): string {
+  return `Unsupported file type for '${fileName}'. Supported formats: PNG, JPEG, GIF, WEBP, HEIC, HEIF.`;
+}
+
 async function loadImagePicker() {
   try {
     return await import("expo-image-picker");
@@ -93,8 +112,8 @@ export async function pickComposerImages(input: { readonly existingCount: number
 
   for (const asset of result.assets) {
     const mimeType = asset.mimeType?.toLowerCase();
-    if (!mimeType?.startsWith("image/")) {
-      error = `Unsupported file type for '${asset.fileName ?? "image"}'.`;
+    if (!mimeType || !isSupportedComposerImageMimeType(mimeType)) {
+      error = unsupportedComposerImageTypeMessage(asset.fileName ?? "image");
       continue;
     }
 

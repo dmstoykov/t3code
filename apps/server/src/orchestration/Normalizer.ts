@@ -1,3 +1,5 @@
+import heicConvert from "heic-convert";
+
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -14,6 +16,22 @@ import { createAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts
 import { ServerConfig } from "../config.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
+
+const HEIC_MIME_TYPES = new Set(["image/heic", "image/heif"]);
+
+const convertHeicAttachmentToJpeg = Effect.fn("Normalizer.convertHeicAttachmentToJpeg")(function* (
+  bytes: Buffer,
+  attachmentName: string,
+) {
+  const converted = yield* Effect.tryPromise({
+    try: () => heicConvert({ buffer: bytes, format: "JPEG", quality: 0.9 }),
+    catch: () =>
+      new OrchestrationDispatchCommandError({
+        message: `Failed to convert HEIC image attachment '${attachmentName}'.`,
+      }),
+  });
+  return Buffer.from(converted);
+});
 
 export const canonicalizeClientCommandTimestamps = (
   command: ClientOrchestrationCommand,
@@ -116,7 +134,18 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
           }
 
           const bytes = Buffer.from(parsed.base64, "base64");
-          if (bytes.byteLength === 0 || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
+          const parsedMimeType = parsed.mimeType.toLowerCase();
+          const isHeic = HEIC_MIME_TYPES.has(parsedMimeType);
+
+          const persistedBytes = isHeic
+            ? yield* convertHeicAttachmentToJpeg(bytes, attachment.name)
+            : bytes;
+          const persistedMimeType = isHeic ? "image/jpeg" : parsedMimeType;
+
+          if (
+            persistedBytes.byteLength === 0 ||
+            persistedBytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
+          ) {
             return yield* new OrchestrationDispatchCommandError({
               message: `Image attachment '${attachment.name}' is empty or too large.`,
             });
@@ -133,8 +162,8 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
             type: "image" as const,
             id: attachmentId,
             name: attachment.name,
-            mimeType: parsed.mimeType.toLowerCase(),
-            sizeBytes: bytes.byteLength,
+            mimeType: persistedMimeType,
+            sizeBytes: persistedBytes.byteLength,
           };
 
           const attachmentPath = resolveAttachmentPath({
@@ -155,7 +184,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
                 }),
             ),
           );
-          yield* fileSystem.writeFile(attachmentPath, bytes).pipe(
+          yield* fileSystem.writeFile(attachmentPath, persistedBytes).pipe(
             Effect.mapError(
               () =>
                 new OrchestrationDispatchCommandError({

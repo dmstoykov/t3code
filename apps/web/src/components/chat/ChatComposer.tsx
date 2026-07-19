@@ -40,8 +40,10 @@ import {
   collapseExpandedComposerCursor,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
+  isSupportedComposerImageMimeType,
   replaceTextRange,
   shouldSubmitComposerOnEnter,
+  unsupportedComposerImageTypeMessage,
 } from "../../composer-logic";
 import { deriveComposerSendState, readFileAsDataUrl } from "../ChatView.logic";
 import {
@@ -1800,8 +1802,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     let nextImageCount = composerImagesRef.current.length;
     let error: string | null = null;
     for (const file of files) {
-      if (!file.type.startsWith("image/")) {
-        error = `Unsupported file type for '${file.name}'. Please attach image files only.`;
+      if (!isSupportedComposerImageMimeType(file.type)) {
+        error = unsupportedComposerImageTypeMessage(file.name);
         continue;
       }
       if (file.size > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
