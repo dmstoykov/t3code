@@ -4,6 +4,7 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -11,6 +12,7 @@ import {
   CommandId,
   type ClientOrchestrationCommand,
   MessageId,
+  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -198,6 +200,34 @@ it.layer(TestLayer, { excludeTestServices: true })(
         expect(Exit.isFailure(result)).toBe(true);
         expect([...newFiles.keys()]).toEqual([]);
       }),
+    );
+
+    it.effect(
+      "rejects an oversized HEIC attachment before attempting conversion",
+      () =>
+        Effect.gen(function* () {
+          // A fake, all-zero "HEIC" buffer larger than the max allowed image
+          // size. If the pre-decode size guard were missing, this would be
+          // handed to the (real) HEIC converter first and fail with a
+          // conversion error instead of the expected size-rejection message.
+          const oversizedBytes = Buffer.alloc(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES + 1);
+          const command = makeTurnStartCommand({
+            name: "huge.heic",
+            mimeType: "image/heic",
+            base64: oversizedBytes.toString("base64"),
+          });
+
+          const { result, newFiles } = yield* runNormalize(command);
+
+          expect(Exit.isFailure(result)).toBe(true);
+          if (!Exit.isFailure(result)) {
+            throw new Error("Expected normalizeDispatchCommand to fail");
+          }
+          const error = Cause.squash(result.cause) as { message?: string };
+          expect(error.message).toMatch(/empty or too large/u);
+          expect([...newFiles.keys()]).toEqual([]);
+        }),
+      { timeout: 20_000 },
     );
   },
 );

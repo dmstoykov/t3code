@@ -137,6 +137,12 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
           const parsedMimeType = parsed.mimeType.toLowerCase();
           const isHeic = HEIC_MIME_TYPES.has(parsedMimeType);
 
+          if (bytes.byteLength === 0 || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
+            return yield* new OrchestrationDispatchCommandError({
+              message: `Image attachment '${attachment.name}' is empty or too large.`,
+            });
+          }
+
           const persistedBytes = isHeic
             ? yield* convertHeicAttachmentToJpeg(bytes, attachment.name)
             : bytes;
